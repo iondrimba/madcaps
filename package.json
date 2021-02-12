@@ -6,15 +6,13 @@
   "source": "./src/app.js",
   "devDependencies": {
     "@babel/core": "^7.9.6",
-    "@babel/preset-env": "^7.9.6",
-    "babel-core": "^6.7.0",
-    "babel-loader": "^8.1.0",
+    "@babel/preset-env": "^7.12.16",
+    "babel-loader": "^8.2.2",
     "babel-polyfill": "^6.6.1",
-    "babel-preset-env": "^1.7.0",
     "clean-webpack-plugin": "^3.0.0",
-    "copy-webpack-plugin": "^6.3.2",
-    "css-loader": "^3.5.3",
-    "html-webpack-plugin": "^4.3.0",
+    "copy-webpack-plugin": "^7.0.0",
+    "css-loader": "^5.0.2",
+    "html-webpack-plugin": "^5.1.0",
     "style-loader": "^1.2.1",
     "webpack": "^5.21.2",
     "webpack-cli": "^4.5.0",
@@ -22,7 +20,7 @@
     "webpack-merge": "^4.2.2"
   },
   "scripts": {
-    "start": "./node_modules/.bin/webpack serve --config webpack.dev.js",
+    "start": "node --trace-deprecation ./node_modules/.bin/webpack serve --config webpack.dev.js",
     "build": "webpack --config webpack.prod.js"
   },
   "repository": {
