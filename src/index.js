@@ -1,7 +1,8 @@
 import App from './app';
 
-App();
+new App().init();
 
 if (module.hot) {
-  module.hot.accept('./app.js', () => { App(); });
+  console.log('hot');
+  module.hot.accept('./app', () => { new App().init(); });
 }

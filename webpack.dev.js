@@ -11,7 +11,6 @@ module.exports = merge(common, {
     clientLogLevel: 'silent',
     stats: 'errors-only',
     open: true,
-    quiet: true,
     port: 9000,
     contentBase: path.resolve(__dirname, './public'),
     contentBasePublicPath: '/',
