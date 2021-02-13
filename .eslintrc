@@ -1,7 +1,4 @@
 {
-  "globals": {
-    "THREE": true
-  },
   "extends": [
     "eslint:recommended"
   ],

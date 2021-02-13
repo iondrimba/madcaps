@@ -40,7 +40,7 @@ class App {
     this.addFloor();
     this.addFloorGrid();
     this.addFloorHelper();
-    this.addSphere({ x: 0, y: 1, z: 0 });
+    this.addSphere({ x: 0, y: 2, z: 0 });
     this.addAxisHelper();
     this.addStatsMonitor();
     this.addWindowListeners();
@@ -105,9 +105,7 @@ class App {
 
   addCameraControls() {
     this.orbitControl = new OrbitControls(this.camera, this.renderer.domElement);
-    this.orbitControl.minPolarAngle = radians(30);
     this.orbitControl.maxPolarAngle = radians(90);
-    this.orbitControl.minAzimuthAngle = radians(-40);
     this.orbitControl.maxAzimuthAngle = radians(40);
     this.orbitControl.enableDamping = true;
     this.orbitControl.dampingFactor = 0.02;
@@ -156,14 +154,13 @@ class App {
     this.directionalLight.shadow.camera.top = 15;
     this.directionalLight.shadow.camera.bottom = -15;
     this.directionalLight.shadow.camera.zoom = 1;
-    this.directionalLight.shadow.camera.needsUpdate = true;
 
     this.scene.add(this.directionalLight);
   }
 
   addFloorGrid() {
-    const size = 50;
-    const divisions = 50;
+    const size = 20;
+    const divisions = 20;
     this.grid = new GridHelper(size, divisions, this.colors.grid, this.colors.grid);
 
     this.grid.position.set(0, 0, 0);
@@ -174,7 +171,7 @@ class App {
   }
 
   addFloor() {
-    const geometry = new PlaneBufferGeometry(50, 50);
+    const geometry = new PlaneBufferGeometry(20, 20);
     const material = new MeshStandardMaterial({ color: this.colors.floor, side: DoubleSide });
 
     this.floor = new Mesh(geometry, material);
@@ -194,7 +191,7 @@ class App {
   }
 
   addSphere({ x, y, z }) {
-    const radius = .3, width = 32, height = 32;
+    const radius = 1, width = 32, height = 32;
     const geometry = new SphereBufferGeometry(radius, width, height);
     const mesh = new Mesh(geometry, this.meshes.sphereMaterial);
 
