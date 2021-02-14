@@ -1,8 +1,10 @@
 import App from './app';
 
-new App().init();
+const app = new App().init();
 
 if (module.hot) {
-  console.log('hot');
-  module.hot.accept('./app', () => { new App().init(); });
+  module.hot.accept('./app', () => {
+    app.cleanUp();
+    app.init();
+  });
 }

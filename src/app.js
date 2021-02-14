@@ -1,5 +1,7 @@
 /* eslint-disable no-console */
 import './style.css';
+import Tweakpane from 'tweakpane';
+import { gsap } from "gsap";
 import {
   Scene,
   Object3D,
@@ -13,9 +15,11 @@ import {
   GridHelper,
   PlaneBufferGeometry,
   MeshStandardMaterial,
+  MeshBasicMaterial,
   Mesh,
   DoubleSide,
   SphereBufferGeometry,
+  BoxBufferGeometry,
 } from 'three';
 import Stats from 'stats-js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -23,14 +27,10 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import {
   radians,
   rgbToHex,
+  distance,
 } from './helpers';
 class App {
-  constructor() {
-    console.log('App1');
-  }
-
   init() {
-    this.clearBody();
     this.setup();
     this.createScene();
     this.createCamera();
@@ -40,14 +40,20 @@ class App {
     this.addFloor();
     this.addFloorGrid();
     this.addFloorHelper();
-    this.addSphere({ x: 0, y: 2, z: 0 });
+    this.addSphere({ x: 0, y: 1, z: -4 });
+    this.addBlocksWall();
     this.addAxisHelper();
     this.addStatsMonitor();
     this.addWindowListeners();
     this.animate();
+    this.animateSphere();
+    this.addTweakPane();
   }
 
-  clearBody() {
+  cleanUp() {
+    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('visibilitychange', this.onVisibilitychange);
+
     while (document.body.childNodes.length) {
       document.body.removeChild(document.body.lastChild);
     }
@@ -56,11 +62,13 @@ class App {
   setup() {
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    this.gsap = gsap;
 
     this.colors = {
       background: rgbToHex(window.getComputedStyle(document.body).backgroundColor),
       floor: '#ffffff',
       ball: '#5661ff',
+      box: '#ff0000',
       grid: '#aca9a9',
       ambientLight: '#ffffff',
       directionalLight: '#ffffff',
@@ -68,13 +76,61 @@ class App {
 
     this.meshes = {
       container: new Object3D(),
-      sphereMaterial: new MeshStandardMaterial({
-        color: this.colors.ball,
-        metalness: .11,
-        emissive: 0x0,
-        roughness: .1,
-      }),
+      boxes: {
+        size: .4,
+        geometry: () => {
+          const width = this.meshes.boxes.size, height = this.meshes.boxes.size /4 , depth = this.meshes.boxes.size;
+
+          return new BoxBufferGeometry(width, height, depth);
+        },
+        material: new MeshStandardMaterial({
+          color: this.colors.box,
+          metalness: .11,
+          emissive: 0x0,
+          roughness: .1,
+        }),
+      },
+      boxWall: {
+        container: new Object3D(),
+        front: [],
+        back: [],
+      },
+      sphere: {
+        mesh: null,
+        size: .25,
+        material: new MeshStandardMaterial({
+          color: this.colors.ball,
+          metalness: .11,
+          emissive: 0x0,
+          roughness: .1,
+        }),
+      },
     };
+
+
+    this.motion = {
+      range: { inMin: 2, inMax: -.5, min: .5, max: -1.8 },
+      clamp: { min: -4.5, max: .05 },
+    };
+
+    this.onResize = this.onResize.bind(this);
+    this.onVisibilitychange = this.onVisibilitychange.bind(this);
+  }
+
+  addTweakPane() {
+    this.tweakpane = new Tweakpane();
+    this.motionGUI = this.tweakpane.addFolder({
+      title: "Motion",
+      expanded: true
+    });
+
+    this.motionGUI.addInput(this.motion.range, 'inMin', { min: -100, max: 100, step: .1 });
+
+    this.motionGUI.addInput(this.motion.range, 'inMax', { min: -100, max: 100, step: .1 });
+
+    this.motionGUI.addInput(this.motion.range, 'min', { min: -100, max: 100, step: .1 });
+
+    this.motionGUI.addInput(this.motion.range, 'max', { min: -100, max: 100, step: .1 });
   }
 
   createScene() {
@@ -191,28 +247,104 @@ class App {
   }
 
   addSphere({ x, y, z }) {
-    const radius = 1, width = 32, height = 32;
+    const radius = this.meshes.sphere.size, width = 32, height = 32;
     const geometry = new SphereBufferGeometry(radius, width, height);
-    const mesh = new Mesh(geometry, this.meshes.sphereMaterial);
+    const mesh = new Mesh(geometry, this.meshes.sphere.material);
 
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
     mesh.position.set(x, y, z);
 
+    this.meshes.sphere.mesh = mesh;
+
     this.scene.add(mesh);
   }
 
-  addWindowListeners() {
-    window.addEventListener('resize', this.onResize.bind(this), { passive: true });
+  getBoxMesh(geometry, material) {
+    const mesh = new Mesh(geometry, material);
 
-    window.addEventListener('visibilitychange', (evt) => {
-      if (evt.target.hidden) {
-        console.log('pause');
-      } else {
-        console.log('play');
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
+
+  addBlocksWall() {
+    const cols = 15;
+    const rows = 10;
+    const geometry = this.meshes.boxes.geometry();
+
+    for (let col = 0; col < cols; col++) {
+      this.meshes.boxWall.front[col] = [];
+      this.meshes.boxWall.back[col] = [];
+
+      for (let row = 0; row < rows; row++) {
+        const front = this.getBoxMesh(geometry, this.meshes.boxes.material);
+        const back = this.getBoxMesh(geometry, this.meshes.boxes.material);
+        const x = row * (this.meshes.boxes.size / 2);
+        const z = col * (this.meshes.boxes.size / 2);
+
+        front.position.set(x, 0, z);
+        back.position.copy(front.position);
+
+        this.meshes.boxWall.container.add(front);
+        this.meshes.boxWall.container.add(back);
+
+        this.meshes.boxWall.front[col][row] = front;
+        this.meshes.boxWall.back[col][row] = back;
       }
-    }, false);
+    }
+
+    this.meshes.boxWall.container.rotateZ(Math.PI / 2);
+
+    this.scene.add(this.meshes.boxWall.container);
+  }
+
+  draw() {
+    const cols = 15;
+    const rows = 10;
+    const { x, z, y } = this.meshes.sphere.mesh.position;
+
+    for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < rows; row++) {
+        const front = this.meshes.boxWall.front[col][row];
+        const back = this.meshes.boxWall.back[col][row];
+
+        const dist = distance(x + y, z, front.position.x, front.position.z);
+        const range = this.gsap.utils.mapRange(this.motion.range.inMin, this.motion.range.inMax, this.motion.range.min, this.motion.range.max, dist);
+        const amount = gsap.utils.clamp(this.motion.clamp.min, this.motion.clamp.max, range);
+
+        this.gsap.to(front.position, {
+          duration: .1,
+          ease: "sine.inOut",
+          y: -amount,
+        });
+
+        this.gsap.to(back.position, {
+          duration: .1,
+          ease: "sine.inOut",
+          y: amount,
+        });
+      }
+    }
+  }
+
+  animateSphere() {
+    gsap.to(this.meshes.sphere.mesh.position, {
+      z: 8,
+      duration: 5,
+      delay: 0,
+      ease: "sine.inOut",
+      repeat: -1,
+      yoyo: true,
+      yoyoEase: "sine.inOut",
+    });
+  }
+
+  addWindowListeners() {
+    window.addEventListener('resize', this.onResize, { passive: true });
+    window.addEventListener('visibilitychange', this.onVisibilitychange, false);
   }
 
   addStatsMonitor() {
@@ -231,11 +363,20 @@ class App {
     this.renderer.setSize(this.width, this.height);
   }
 
+  onVisibilitychange(evt) {
+    if (evt.target.hidden) {
+      console.log('pause');
+    } else {
+      console.log('play');
+    }
+  }
+
   animate() {
     this.stats.begin();
 
     this.orbitControl.update();
     this.renderer.render(this.scene, this.camera);
+    this.draw();
 
     this.stats.end();
 
