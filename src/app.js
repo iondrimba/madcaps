@@ -46,15 +46,18 @@ class App {
     this.addFloor();
     this.addFloorGrid();
     this.addFloorHelper();
-    this.addSphere({ x: -1, y: 1, z: 4 });
-    this.addBlocksWall(this.meshes.boxWall, -1);
-    this.addBlocksWall(this.meshes.boxWall1, 1);
+    this.addSphere();
+    this.addBlocksWall(this.meshes.boxWall, -1, -1.4);
+    this.addBlocksWall(this.meshes.boxWall1, 1, -1.4);
     this.addAxisHelper();
     this.addStatsMonitor();
     this.addWindowListeners();
+    this.meshes.sphere.mesh.position.set(-1, 1, 2.5);
+
     this.animate();
     this.animateSphere();
     this.addTweakPane();
+
   }
 
   cleanUp() {
@@ -78,10 +81,10 @@ class App {
 
     this.colors = {
       background: rgbToHex(window.getComputedStyle(document.body).backgroundColor),
-      floor: '#431bff',
+      floor: '#4100ff',
       ball: '#16ff38',
       box: '#ffffff',
-      grid: '#aca9a9',
+      grid: '#957fff',
       ambientLight: '#ffffff',
       directionalLight: '#ffffff',
     };
@@ -113,7 +116,7 @@ class App {
       sphere: {
         mesh: null,
         size: .25,
-        material:  new MeshStandardMaterial({
+        material: new MeshStandardMaterial({
           color: this.colors.ball,
           metalness: .11,
           emissive: 0x0,
@@ -130,8 +133,8 @@ class App {
         radius: 1,
       },
       timeline: {
-        start: -1,
-        end: 4,
+        start: -2.5,
+        end: 2.5,
       }
     };
 
@@ -186,16 +189,8 @@ class App {
       this.tweenColors(this.floor.material, hexToRgb(value));
     });
 
-    this.guiColors.addInput(this.colors, "floor").on("change", (value) => {
-      this.tweenColors(this.floor.material, hexToRgb(value));
-    });
-
     this.guiColors.addInput(this.colors, "ball").on("change", (value) => {
       this.tweenColors(this.meshes.sphere.material, hexToRgb(value));
-    });
-
-    this.guiColors.addInput(this.colors, "box").on("change", (value) => {
-      this.tweenColors(this.meshes.boxes.material, hexToRgb(value));
     });
 
     this.guiColors.addInput(this.colors, "grid").on("change", (value) => {
@@ -241,25 +236,27 @@ class App {
 
   addCameraControls() {
     this.orbitControl = new OrbitControls(this.camera, this.renderer.domElement);
-    this.orbitControl.maxPolarAngle = radians(90);
-    this.orbitControl.maxAzimuthAngle = radians(40);
+    this.orbitControl.minPolarAngle = radians(0);
+    this.orbitControl.maxPolarAngle = radians(65);
     this.orbitControl.enableDamping = true;
+    this.orbitControl.minDistance   = 20;
+    this.orbitControl.maxDistance   = 50;
     this.orbitControl.dampingFactor = 0.02;
 
-    document.body.style.cursor = '-moz-grabg';
-    document.body.style.cursor = '-webkit-grab';
+    document.body.style.cursor = "-moz-grabg";
+    document.body.style.cursor = "-webkit-grab";
 
-    this.orbitControl.addEventListener('start', () => {
+    this.orbitControl.addEventListener("start", () => {
       requestAnimationFrame(() => {
-        document.body.style.cursor = '-moz-grabbing';
-        document.body.style.cursor = '-webkit-grabbing';
+        document.body.style.cursor = "-moz-grabbing";
+        document.body.style.cursor = "-webkit-grabbing";
       });
     });
 
-    this.orbitControl.addEventListener('end', () => {
+    this.orbitControl.addEventListener("end", () => {
       requestAnimationFrame(() => {
-        document.body.style.cursor = '-moz-grab';
-        document.body.style.cursor = '-webkit-grab';
+        document.body.style.cursor = "-moz-grab";
+        document.body.style.cursor = "-webkit-grab";
       });
     });
   }
@@ -300,10 +297,10 @@ class App {
     this.grid = new GridHelper(size, divisions, this.colors.grid, this.colors.grid);
 
     this.grid.position.set(0, -.2, 0);
-    this.grid.material.opacity = 0;
-    this.grid.material.transparent = false;
+    this.grid.material.opacity = 1;
+    this.grid.material.transparent = true;
 
-    // this.scene.add(this.grid);
+    this.scene.add(this.grid);
   }
 
   addFloor() {
@@ -311,7 +308,7 @@ class App {
     const material = new MeshStandardMaterial({ color: this.colors.floor, side: DoubleSide });
 
     this.floor = new Mesh(geometry, material);
-    this.floor.position.y = -.2;
+    this.floor.position.y = -.21;
     this.floor.position.z = 0;
     this.floor.rotateX(Math.PI / 2);
     this.floor.receiveShadow = true;
@@ -328,15 +325,13 @@ class App {
     }
   }
 
-  addSphere({ x, y, z }) {
+  addSphere() {
     const radius = this.meshes.sphere.size, width = 32, height = 32;
     const geometry = new SphereBufferGeometry(radius, width, height);
     const mesh = new Mesh(geometry, this.meshes.sphere.material);
 
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-
-    mesh.position.set(x, y, z);
 
     this.meshes.sphere.mesh = mesh;
 
@@ -352,7 +347,7 @@ class App {
     return mesh;
   }
 
-  addBlocksWall(boxWall, x) {
+  addBlocksWall(boxWall, x, z) {
     const cols = 15;
     const rows = 10;
     const geometry = this.meshes.boxes.geometry();
@@ -380,6 +375,7 @@ class App {
 
     boxWall.container.rotateZ(Math.PI / 2);
     boxWall.container.position.x = x;
+    boxWall.container.position.z = z;
 
     this.scene.add(boxWall.container);
   }
@@ -397,11 +393,11 @@ class App {
         if (x < 0) {
           front = this.meshes.boxWall.front[col][row];
           back = this.meshes.boxWall.back[col][row];
-          dist = distance(x + y + 1, z, front.position.x, front.position.z);
+          dist = distance(x + y + 1, z - this.meshes.boxWall.container.position.z, front.position.x, front.position.z);
         } else {
           front = this.meshes.boxWall1.front[col][row];
           back = this.meshes.boxWall1.back[col][row];
-          dist = distance(x + y - 1, z, front.position.x, front.position.z);
+          dist = distance(x + y - 1, z - this.meshes.boxWall1.container.position.z, front.position.x, front.position.z);
         }
 
         const range = this.gsap.utils.mapRange(this.motion.range.inMin, this.motion.range.inMax, this.motion.range.min, this.motion.range.max, dist);
