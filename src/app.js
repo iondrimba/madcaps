@@ -1,7 +1,7 @@
-/* eslint-disable no-console */
 import './style.css';
 import Tweakpane from 'tweakpane';
-import { gsap } from "gsap";
+import { gsap } from 'gsap';
+import { MotionPathPlugin } from 'gsap/MotionPathPlugin.js';
 import {
   Scene,
   Object3D,
@@ -15,7 +15,8 @@ import {
   GridHelper,
   PlaneBufferGeometry,
   MeshStandardMaterial,
-  MeshBasicMaterial,
+  MeshMatcapMaterial,
+  TextureLoader,
   Mesh,
   DoubleSide,
   SphereBufferGeometry,
@@ -28,9 +29,14 @@ import {
   radians,
   rgbToHex,
   distance,
+  hexToRgb,
 } from './helpers';
+
+gsap.registerPlugin(MotionPathPlugin);
+
 class App {
   init() {
+    this.loadMatCaps();
     this.setup();
     this.createScene();
     this.createCamera();
@@ -40,8 +46,9 @@ class App {
     this.addFloor();
     this.addFloorGrid();
     this.addFloorHelper();
-    this.addSphere({ x: 0, y: 1, z: -4 });
-    this.addBlocksWall();
+    this.addSphere({ x: -1, y: 1, z: 4 });
+    this.addBlocksWall(this.meshes.boxWall, -1);
+    this.addBlocksWall(this.meshes.boxWall1, 1);
     this.addAxisHelper();
     this.addStatsMonitor();
     this.addWindowListeners();
@@ -59,16 +66,21 @@ class App {
     }
   }
 
+  loadMatCaps() {
+    this.textureBox = new TextureLoader().load('matcaps/736655_D9D8D5_2F281F_B1AEAB.png');
+  }
+
   setup() {
+    this.debug = false;
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.gsap = gsap;
 
     this.colors = {
       background: rgbToHex(window.getComputedStyle(document.body).backgroundColor),
-      floor: '#ffffff',
-      ball: '#5661ff',
-      box: '#ff0000',
+      floor: '#431bff',
+      ball: '#16ff38',
+      box: '#ffffff',
       grid: '#aca9a9',
       ambientLight: '#ffffff',
       directionalLight: '#ffffff',
@@ -79,15 +91,13 @@ class App {
       boxes: {
         size: .4,
         geometry: () => {
-          const width = this.meshes.boxes.size, height = this.meshes.boxes.size /4 , depth = this.meshes.boxes.size;
+          const width = this.meshes.boxes.size, height = this.meshes.boxes.size / 4, depth = this.meshes.boxes.size;
 
           return new BoxBufferGeometry(width, height, depth);
         },
-        material: new MeshStandardMaterial({
+        material: new MeshMatcapMaterial({
           color: this.colors.box,
-          metalness: .11,
-          emissive: 0x0,
-          roughness: .1,
+          matcap: this.textureBox,
         }),
       },
       boxWall: {
@@ -95,10 +105,15 @@ class App {
         front: [],
         back: [],
       },
+      boxWall1: {
+        container: new Object3D(),
+        front: [],
+        back: [],
+      },
       sphere: {
         mesh: null,
         size: .25,
-        material: new MeshStandardMaterial({
+        material:  new MeshStandardMaterial({
           color: this.colors.ball,
           metalness: .11,
           emissive: 0x0,
@@ -107,10 +122,17 @@ class App {
       },
     };
 
-
     this.motion = {
-      range: { inMin: 2, inMax: -.5, min: .5, max: -1.8 },
+      range: { inMin: 2.5, inMax: -2, min: .5, max: -2 },
       clamp: { min: -4.5, max: .05 },
+      circular: {
+        angle: 0,
+        radius: 1,
+      },
+      timeline: {
+        start: -1,
+        end: 4,
+      }
     };
 
     this.onResize = this.onResize.bind(this);
@@ -120,23 +142,81 @@ class App {
   addTweakPane() {
     this.tweakpane = new Tweakpane();
     this.motionGUI = this.tweakpane.addFolder({
-      title: "Motion",
-      expanded: true
+      title: 'Motion',
+      expanded: false,
     });
 
     this.motionGUI.addInput(this.motion.range, 'inMin', { min: -100, max: 100, step: .1 });
-
     this.motionGUI.addInput(this.motion.range, 'inMax', { min: -100, max: 100, step: .1 });
-
     this.motionGUI.addInput(this.motion.range, 'min', { min: -100, max: 100, step: .1 });
-
     this.motionGUI.addInput(this.motion.range, 'max', { min: -100, max: 100, step: .1 });
+
+    // control lights
+    this.guiLights = this.tweakpane.addFolder({
+      title: "Lights",
+      expanded: false
+    });
+
+    this.guiLights
+      .addInput(this.directionalLight.position, "x", { min: -100, max: 100 })
+      .on("change", (value) => {
+        this.directionalLight.position.x = value;
+      });
+
+    this.guiLights
+      .addInput(this.directionalLight.position, "y", { min: -100, max: 100 })
+      .on("change", (value) => {
+        this.directionalLight.position.y = value;
+      });
+
+    this.guiLights
+      .addInput(this.directionalLight.position, "z", { min: -100, max: 100 })
+      .on("change", (value) => {
+        this.directionalLight.position.z = value;
+      });
+
+    // control colors
+    this.guiColors = this.tweakpane.addFolder({
+      title: "Colors",
+      expanded: false
+    });
+
+    this.guiColors.addInput(this.colors, "background").on("change", (value) => {
+      this.scene.background = new Color(value);
+      this.tweenColors(this.floor.material, hexToRgb(value));
+    });
+
+    this.guiColors.addInput(this.colors, "floor").on("change", (value) => {
+      this.tweenColors(this.floor.material, hexToRgb(value));
+    });
+
+    this.guiColors.addInput(this.colors, "ball").on("change", (value) => {
+      this.tweenColors(this.meshes.sphere.material, hexToRgb(value));
+    });
+
+    this.guiColors.addInput(this.colors, "box").on("change", (value) => {
+      this.tweenColors(this.meshes.boxes.material, hexToRgb(value));
+    });
+
+    this.guiColors.addInput(this.colors, "grid").on("change", (value) => {
+      this.tweenColors(this.grid.material, hexToRgb(value));
+    });
+  }
+
+  tweenColors(material, rgb) {
+    gsap.to(material.color, 0.3, {
+      ease: "power2.out",
+      r: rgb.r,
+      g: rgb.g,
+      b: rgb.b
+    });
   }
 
   createScene() {
+    console.log(this.colors.background);
     this.scene = new Scene();
     this.scene.background = new Color(this.colors.background);
-    this.renderer = new WebGLRenderer({ antialias: true });
+    this.renderer = new WebGLRenderer({ antialias: true, transparent: true });
     this.scene.add(this.meshes.container);
     this.renderer.setSize(this.width, this.height);
 
@@ -154,7 +234,7 @@ class App {
 
   createCamera() {
     this.camera = new PerspectiveCamera(20, this.width / this.height, 1, 1000);
-    this.camera.position.set(0, 10, 50);
+    this.camera.position.set(-20, 25, 20);
 
     this.scene.add(this.camera);
   }
@@ -199,7 +279,7 @@ class App {
     this.directionalLight.shadow.camera.needsUpdate = true;
     this.directionalLight.shadow.mapSize.width = 2048;
     this.directionalLight.shadow.mapSize.height = 2048;
-    this.directionalLight.position.set(0, 13, 23);
+    this.directionalLight.position.set(-40, 100, -10);
     this.directionalLight.target = target;
 
     this.directionalLight.shadow.camera.far = 1000;
@@ -215,23 +295,23 @@ class App {
   }
 
   addFloorGrid() {
-    const size = 20;
-    const divisions = 20;
+    const size = 100;
+    const divisions = 100;
     this.grid = new GridHelper(size, divisions, this.colors.grid, this.colors.grid);
 
-    this.grid.position.set(0, 0, 0);
+    this.grid.position.set(0, -.2, 0);
     this.grid.material.opacity = 0;
     this.grid.material.transparent = false;
 
-    this.scene.add(this.grid);
+    // this.scene.add(this.grid);
   }
 
   addFloor() {
-    const geometry = new PlaneBufferGeometry(20, 20);
+    const geometry = new PlaneBufferGeometry(100, 100);
     const material = new MeshStandardMaterial({ color: this.colors.floor, side: DoubleSide });
 
     this.floor = new Mesh(geometry, material);
-    this.floor.position.y = 0;
+    this.floor.position.y = -.2;
     this.floor.position.z = 0;
     this.floor.rotateX(Math.PI / 2);
     this.floor.receiveShadow = true;
@@ -240,10 +320,12 @@ class App {
   }
 
   addFloorHelper() {
-    this.controls = new TransformControls(this.camera, this.renderer.domElement);
-    this.controls.enabled = false;
-    this.controls.attach(this.floor);
-    this.scene.add(this.controls);
+    if (this.debug) {
+      this.controls = new TransformControls(this.camera, this.renderer.domElement);
+      this.controls.enabled = false;
+      this.controls.attach(this.floor);
+      this.scene.add(this.controls);
+    }
   }
 
   addSphere({ x, y, z }) {
@@ -270,14 +352,14 @@ class App {
     return mesh;
   }
 
-  addBlocksWall() {
+  addBlocksWall(boxWall, x) {
     const cols = 15;
     const rows = 10;
     const geometry = this.meshes.boxes.geometry();
 
     for (let col = 0; col < cols; col++) {
-      this.meshes.boxWall.front[col] = [];
-      this.meshes.boxWall.back[col] = [];
+      boxWall.front[col] = [];
+      boxWall.back[col] = [];
 
       for (let row = 0; row < rows; row++) {
         const front = this.getBoxMesh(geometry, this.meshes.boxes.material);
@@ -285,45 +367,55 @@ class App {
         const x = row * (this.meshes.boxes.size / 2);
         const z = col * (this.meshes.boxes.size / 2);
 
-        front.position.set(x, 0, z);
-        back.position.copy(front.position);
+        front.position.set(x, .05, z);
+        back.position.set(x, -.05, z);;
 
-        this.meshes.boxWall.container.add(front);
-        this.meshes.boxWall.container.add(back);
+        boxWall.container.add(front);
+        boxWall.container.add(back);
 
-        this.meshes.boxWall.front[col][row] = front;
-        this.meshes.boxWall.back[col][row] = back;
+        boxWall.front[col][row] = front;
+        boxWall.back[col][row] = back;
       }
     }
 
-    this.meshes.boxWall.container.rotateZ(Math.PI / 2);
+    boxWall.container.rotateZ(Math.PI / 2);
+    boxWall.container.position.x = x;
 
-    this.scene.add(this.meshes.boxWall.container);
+    this.scene.add(boxWall.container);
   }
 
   draw() {
     const cols = 15;
     const rows = 10;
     const { x, z, y } = this.meshes.sphere.mesh.position;
+    let dist = 0;
+    let front = null;
+    let back = null;
 
     for (let col = 0; col < cols; col++) {
       for (let row = 0; row < rows; row++) {
-        const front = this.meshes.boxWall.front[col][row];
-        const back = this.meshes.boxWall.back[col][row];
+        if (x < 0) {
+          front = this.meshes.boxWall.front[col][row];
+          back = this.meshes.boxWall.back[col][row];
+          dist = distance(x + y + 1, z, front.position.x, front.position.z);
+        } else {
+          front = this.meshes.boxWall1.front[col][row];
+          back = this.meshes.boxWall1.back[col][row];
+          dist = distance(x + y - 1, z, front.position.x, front.position.z);
+        }
 
-        const dist = distance(x + y, z, front.position.x, front.position.z);
         const range = this.gsap.utils.mapRange(this.motion.range.inMin, this.motion.range.inMax, this.motion.range.min, this.motion.range.max, dist);
-        const amount = gsap.utils.clamp(this.motion.clamp.min, this.motion.clamp.max, range);
+        const amount = this.gsap.utils.clamp(this.motion.clamp.min, this.motion.clamp.max, range);
 
         this.gsap.to(front.position, {
           duration: .1,
-          ease: "sine.inOut",
+          ease: 'sine.inOut',
           y: -amount,
         });
 
         this.gsap.to(back.position, {
           duration: .1,
-          ease: "sine.inOut",
+          ease: 'sine.inOut',
           y: amount,
         });
       }
@@ -331,14 +423,41 @@ class App {
   }
 
   animateSphere() {
-    gsap.to(this.meshes.sphere.mesh.position, {
-      z: 8,
-      duration: 5,
-      delay: 0,
-      ease: "sine.inOut",
-      repeat: -1,
-      yoyo: true,
-      yoyoEase: "sine.inOut",
+    const tl = this.gsap.timeline({
+      defaults: { duration: 1, ease: 'linear' },
+      onComplete: () => {
+        tl.restart();
+      }
+    });
+
+    tl.to(this.meshes.sphere.mesh.position, {
+      z: this.motion.timeline.start,
+    });
+
+    tl.to(this.meshes.sphere.mesh.position, {
+      onUpdate: () => {
+        this.meshes.sphere.mesh.position.x = -(Math.cos(radians(this.motion.circular.angle)) * this.motion.circular.radius);
+        this.meshes.sphere.mesh.position.z = (Math.sin(radians(this.motion.circular.angle)) * this.motion.circular.radius - Math.abs(this.motion.timeline.start));
+        this.motion.circular.angle -= 3;
+      },
+      onComplete: () => {
+        this.motion.circular.angle = 0;
+      }
+    });
+
+    tl.to(this.meshes.sphere.mesh.position, {
+      z: this.motion.timeline.end,
+    });
+
+    tl.to(this.meshes.sphere.mesh.position, {
+      onUpdate: () => {
+        this.meshes.sphere.mesh.position.x = (Math.cos(radians(this.motion.circular.angle)) * this.motion.circular.radius);
+        this.meshes.sphere.mesh.position.z = -(Math.sin(radians(this.motion.circular.angle)) * this.motion.circular.radius - this.motion.timeline.end);
+        this.motion.circular.angle -= 3;
+      },
+      onComplete: () => {
+        this.motion.circular.angle = 0;
+      }
     });
   }
 
@@ -373,13 +492,10 @@ class App {
 
   animate() {
     this.stats.begin();
-
     this.orbitControl.update();
     this.renderer.render(this.scene, this.camera);
     this.draw();
-
     this.stats.end();
-
 
     requestAnimationFrame(this.animate.bind(this));
   }
