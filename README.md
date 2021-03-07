@@ -6,7 +6,7 @@ Playing with Matcaps and Threejs
 
 ![Image Title](https://raw.githubusercontent.com/iondrimba/images/master/madcaps.gif)
 
-## [Demo](https://iondrimba.github.io/madcaps/public/)
+## [Demo](https://iondrimba.github.io/madcaps/public/index.html)
 
 ## Credits
 
