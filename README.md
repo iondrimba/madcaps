@@ -2,7 +2,7 @@
 
 Playing with Matcaps and Threejs
 
-![Node.js CI](https://github.com/iondrimba/madcaps/workflows/Node.js%20CI/badge.svg)
+[![Node.js CI](https://github.com/iondrimba/madcaps/actions/workflows/node.js.yml/badge.svg)](https://github.com/iondrimba/madcaps/actions/workflows/node.js.yml)
 
 ![Image Title](https://raw.githubusercontent.com/iondrimba/images/master/madcaps.gif)
 
