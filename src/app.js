@@ -70,7 +70,7 @@ class App {
   }
 
   loadMatCaps() {
-    this.textureBox = new TextureLoader().load('./matcaps/736655_D9D8D5_2F281F_B1AEAB.png');
+    this.textureBox = new TextureLoader().load('./matcaps/736655_D9D8D5_2F281F_B1AEAB.webp');
   }
 
   setup() {
