@@ -30,13 +30,13 @@ import {
   rgbToHex,
   distance,
   hexToRgb,
+  lerpColor,
 } from './helpers';
 
 gsap.registerPlugin(MotionPathPlugin);
 
 class App {
   init() {
-    this.loadMatCaps();
     this.setup();
     this.createScene();
     this.createCamera();
@@ -56,13 +56,11 @@ class App {
 
     this.animate();
     this.animateSphere();
-    this.addTweakPane();
 
   }
 
   cleanUp() {
     window.removeEventListener('resize', this.onResize);
-    window.removeEventListener('visibilitychange', this.onVisibilitychange);
 
     while (document.body.childNodes.length) {
       document.body.removeChild(document.body.lastChild);
@@ -70,7 +68,7 @@ class App {
   }
 
   loadMatCaps() {
-    this.textureBox = new TextureLoader().load('./matcaps/736655_D9D8D5_2F281F_B1AEAB.webp');
+    this.textureBox = new TextureLoader().load('./assets/3B3C3F_DAD9D5_929290_ABACA8.png');
   }
 
   setup() {
@@ -81,12 +79,16 @@ class App {
 
     this.colors = {
       background: rgbToHex(window.getComputedStyle(document.body).backgroundColor),
-      floor: '#4100ff',
-      ball: '#16ff38',
-      box: '#ffffff',
+      floor: '#fffc03',
+      ball: '#00fffc',
+      box: '#fc00ff',
       grid: '#957fff',
       ambientLight: '#ffffff',
       directionalLight: '#ffffff',
+      lerp: {
+        start: '#00fffc',
+        end: '#fc00ff',
+      }
     };
 
     this.meshes = {
@@ -98,10 +100,6 @@ class App {
 
           return new BoxBufferGeometry(width, height, depth);
         },
-        material: new MeshMatcapMaterial({
-          color: this.colors.box,
-          matcap: this.textureBox,
-        }),
       },
       boxWall: {
         container: new Object3D(),
@@ -138,77 +136,15 @@ class App {
       }
     };
 
+    this.motionColor = {
+      range: { inMin: 2.5, inMax: -2, min: .5, max: -2 },
+      clamp: { min: -4.5, max: .05 },
+    };
+
     this.onResize = this.onResize.bind(this);
-    this.onVisibilitychange = this.onVisibilitychange.bind(this);
-  }
-
-  addTweakPane() {
-    this.tweakpane = new Tweakpane();
-    this.motionGUI = this.tweakpane.addFolder({
-      title: 'Motion',
-      expanded: false,
-    });
-
-    this.motionGUI.addInput(this.motion.range, 'inMin', { min: -100, max: 100, step: .1 });
-    this.motionGUI.addInput(this.motion.range, 'inMax', { min: -100, max: 100, step: .1 });
-    this.motionGUI.addInput(this.motion.range, 'min', { min: -100, max: 100, step: .1 });
-    this.motionGUI.addInput(this.motion.range, 'max', { min: -100, max: 100, step: .1 });
-
-    // control lights
-    this.guiLights = this.tweakpane.addFolder({
-      title: "Lights",
-      expanded: false
-    });
-
-    this.guiLights
-      .addInput(this.directionalLight.position, "x", { min: -100, max: 100 })
-      .on("change", (value) => {
-        this.directionalLight.position.x = value;
-      });
-
-    this.guiLights
-      .addInput(this.directionalLight.position, "y", { min: -100, max: 100 })
-      .on("change", (value) => {
-        this.directionalLight.position.y = value;
-      });
-
-    this.guiLights
-      .addInput(this.directionalLight.position, "z", { min: -100, max: 100 })
-      .on("change", (value) => {
-        this.directionalLight.position.z = value;
-      });
-
-    // control colors
-    this.guiColors = this.tweakpane.addFolder({
-      title: "Colors",
-      expanded: false
-    });
-
-    this.guiColors.addInput(this.colors, "background").on("change", (value) => {
-      this.scene.background = new Color(value);
-      this.tweenColors(this.floor.material, hexToRgb(value));
-    });
-
-    this.guiColors.addInput(this.colors, "ball").on("change", (value) => {
-      this.tweenColors(this.meshes.sphere.material, hexToRgb(value));
-    });
-
-    this.guiColors.addInput(this.colors, "grid").on("change", (value) => {
-      this.tweenColors(this.grid.material, hexToRgb(value));
-    });
-  }
-
-  tweenColors(material, rgb) {
-    gsap.to(material.color, 0.3, {
-      ease: "power2.out",
-      r: rgb.r,
-      g: rgb.g,
-      b: rgb.b
-    });
   }
 
   createScene() {
-    console.log(this.colors.background);
     this.scene = new Scene();
     this.scene.background = new Color(this.colors.background);
     this.renderer = new WebGLRenderer({ antialias: true, transparent: true });
@@ -239,8 +175,8 @@ class App {
     this.orbitControl.minPolarAngle = radians(0);
     this.orbitControl.maxPolarAngle = radians(65);
     this.orbitControl.enableDamping = true;
-    this.orbitControl.minDistance   = 20;
-    this.orbitControl.maxDistance   = 50;
+    this.orbitControl.minDistance = 20;
+    this.orbitControl.maxDistance = 50;
     this.orbitControl.dampingFactor = 0.02;
 
     document.body.style.cursor = "-moz-grabg";
@@ -297,7 +233,7 @@ class App {
     this.grid = new GridHelper(size, divisions, this.colors.grid, this.colors.grid);
 
     this.grid.position.set(0, -.2, 0);
-    this.grid.material.opacity = 1;
+    this.grid.material.opacity = 0;
     this.grid.material.transparent = true;
 
     this.scene.add(this.grid);
@@ -338,11 +274,16 @@ class App {
     this.scene.add(mesh);
   }
 
-  getBoxMesh(geometry, material) {
-    const mesh = new Mesh(geometry, material);
+  getBoxMesh(geometry, boxes) {
+    const m = new MeshStandardMaterial({
+      color: this.colors.lerp.end,
+      metalness: .11,
+      emissive: 0x0,
+      roughness: .1,
+    });
+    const mesh = new Mesh(geometry, m);
 
     mesh.castShadow = true;
-    mesh.receiveShadow = true;
 
     return mesh;
   }
@@ -357,8 +298,8 @@ class App {
       boxWall.back[col] = [];
 
       for (let row = 0; row < rows; row++) {
-        const front = this.getBoxMesh(geometry, this.meshes.boxes.material);
-        const back = this.getBoxMesh(geometry, this.meshes.boxes.material);
+        const front = this.getBoxMesh(geometry, this.meshes.boxes);
+        const back = this.getBoxMesh(geometry, this.meshes.boxes);
         const x = row * (this.meshes.boxes.size / 2);
         const z = col * (this.meshes.boxes.size / 2);
 
@@ -402,6 +343,12 @@ class App {
 
         const range = this.gsap.utils.mapRange(this.motion.range.inMin, this.motion.range.inMax, this.motion.range.min, this.motion.range.max, dist);
         const amount = this.gsap.utils.clamp(this.motion.clamp.min, this.motion.clamp.max, range);
+        const rangeDist = this.gsap.utils.mapRange(0, 2.5, 0, 1, dist);
+        const rangeClamp = this.gsap.utils.clamp(0, 1, rangeDist);
+        const l = lerpColor(this.colors.lerp.start, this.colors.lerp.end, Number(rangeClamp.toFixed(2)));
+
+        front.material.color = new Color(l);
+        back.material.color = new Color(l);
 
         this.gsap.to(front.position, {
           duration: .1,
@@ -459,7 +406,6 @@ class App {
 
   addWindowListeners() {
     window.addEventListener('resize', this.onResize, { passive: true });
-    window.addEventListener('visibilitychange', this.onVisibilitychange, false);
   }
 
   addStatsMonitor() {
@@ -476,14 +422,6 @@ class App {
 
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.width, this.height);
-  }
-
-  onVisibilitychange(evt) {
-    if (evt.target.hidden) {
-      console.log('pause');
-    } else {
-      console.log('play');
-    }
   }
 
   animate() {

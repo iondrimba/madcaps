@@ -21,7 +21,7 @@ module.exports = {
     }),
     new CopyPlugin({
       patterns: [
-        { from: './src/matcaps', to: 'matcaps' },
+        { from: './src/assets', to: 'assets' },
       ],
     }),
     new CleanWebpackPlugin(),
